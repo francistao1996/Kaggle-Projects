@@ -161,12 +161,17 @@ x_train, x_test, y_train, y_test = \
 # Prediction
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor
 
+
+regg = GradientBoostingRegressor(n_estimators = 500)
 regf = RandomForestRegressor()
 regf2 = RandomForestRegressor(n_estimators=500)
+std_reg = LinearRegression()
+
+regg.fit(x_train, y_train)
 regf2.fit(x_train, y_train)
 regf.fit(x_train, y_train)
-std_reg = LinearRegression()
 std_reg.fit(x_train, y_train)
 
 r2_trf = regf.score(x_train, y_train)
@@ -175,19 +180,23 @@ r2_tr = std_reg.score(x_train, y_train)
 r2_te = std_reg.score(x_test, y_test)
 
 # Predicting Y anc calculating RMSE
+Y_predg = regg.predict(x_test)
 Y_predf = regf.predict(x_test)
 Y_pred = std_reg.predict(x_test)
 Y_predf2 = regf2.predict(x_test)
+
 from sklearn.metrics import mean_squared_error
 rmsef = math.sqrt(mean_squared_error(y_test, Y_predf))
 rmse = math.sqrt(mean_squared_error(y_test, Y_pred))
 rmsef2 = math.sqrt(mean_squared_error(y_test, Y_predf2))
+rmseg = math.sqrt(mean_squared_error(y_test, Y_predg))
 
 # Calculating RMSLE
 from sklearn.metrics import mean_squared_log_error
 rmslef = math.sqrt(mean_squared_log_error(y_test, Y_predf))
 rmsle = math.sqrt(mean_squared_log_error(y_test, Y_pred))
 rmslef2 = math.sqrt(mean_squared_log_error(y_test, Y_predf2))
+rmsleg = math.sqrt(mean_squared_log_error(y_test, Y_predg))
 
 # Import test data
 testdata = pd.read_csv('D:/Udemy/Data Science 2020 Complete Data Science and Machine Learning/006 - Kaggle Project/test.csv')
@@ -219,9 +228,13 @@ Y_pred2 = pd.DataFrame(std_reg.predict(testdata_dummy))
 Y_pred3 = std_reg.predict(testdata_dummy)
 Y_pred4 = regf.predict(testdata_dummy)
 Y_pred5 = regf2.predict(testdata_dummy)
+Y_pred6 = regg.predict(testdata_dummy)
+
+pred6 = np.exp(Y_pred6) #regg
 pred4 = np.exp(Y_pred4) #regf
 pred3 = np.exp(Y_pred3)
 pred5 = np.exp(Y_pred5) # regf2
+
 ans4 = pd.concat([time,Y_pred2], axis=1)
 ans4.columns = ['datetime','count']
 ans4.to_csv('D:/Kaggle/answer4.csv', index=False)
@@ -237,3 +250,7 @@ ans6.to_csv('D:/Kaggle/answer6.csv', index=False)
 ans7 = pd.concat([time,pd.DataFrame(pred5)], axis=1)
 ans7.columns = ['datetime','count']
 ans7.to_csv('D:/Kaggle/answer7.csv', index=False)
+
+ans8 = pd.concat([time,pd.DataFrame(pred6)], axis=1)
+ans8.columns = ['datetime','count']
+ans8.to_csv('D:/Kaggle/answer8.csv', index=False)
