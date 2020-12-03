@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 %matplotlib qt5
 import math
 import datetime
+import xgboost as xgb
+import warnings
+warnings.filterwarnings('always')
+warnings.filterwarnings('ignore')
 
 # Import dataset
 bike = pd.read_csv('D:/Udemy/Data Science 2020 Complete Data Science and Machine Learning/006 - Kaggle Project/train.csv')
@@ -21,7 +25,7 @@ bikec.hist(rwidth=0.9)
 plt.tight_layout()
 
 # Create Year, Month, Hour 
-bikec['year'] = pd.DatetimeIndex(bikec['datetime']).year
+bikec['year'] = pd.DatetimeIndex(bikec['datetime']).year.map({2011:0,2012:1})
 bikec['month'] = pd.DatetimeIndex(bikec['datetime']).month
 bikec['hour'] = pd.DatetimeIndex(bikec['datetime']).hour
 
@@ -113,12 +117,13 @@ bikec['count'].describe()
 
 bikec['count'].quantile([0.05, 0.1, 0.15, 0.9, 0.95, 0.99])
 
+bikec = bikec[np.abs(bikec['count']-bikec['count'].mean()) <= (3*bikec['count'].std())]
 # Check multiple linear regression assumptions
 # Create the correlation matrix
 correlation = bikec[['temp','atemp','humidity','windspeed','count']].corr()
 
 # Drop features above and added 'windspeed' cuz its correlation is too low with demand
-bikec_remain = bikec.drop(['year','workingday'], axis=1)
+bikec_remain = bikec
 
 # Check the autocorrelation in demand using acorr
 df1 = pd.to_numeric(bikec_remain['count'], downcast = 'float')
@@ -141,6 +146,7 @@ bikec_remain['count'] = np.log(bikec_remain['count'])
 
 bikec_remain.dtypes
 
+bikec_remain['year'] = bikec_remain['year'].astype('category')
 bikec_remain['season'] = bikec_remain['season'].astype('category')
 bikec_remain['month'] = bikec_remain['month'].astype('category')
 bikec_remain['hour'] = bikec_remain['hour'].astype('category')
@@ -152,23 +158,34 @@ bikec_remain1 = bikec_remain.drop(['datetime'], axis=1)
 bike_dummy = pd.get_dummies(bikec_remain1, drop_first = True)
 
 Y = bike_dummy[['count']]
-X = bike_dummy.drop(['count'], axis = 1)
+X = bike_dummy.drop(['count'], axis=1)
 
 from sklearn.model_selection import train_test_split
 x_train, x_test, y_train, y_test = \
-  train_test_split(X, Y, test_size = 0.25, random_state = 123)
+  train_test_split(X, Y, test_size = 0.25, random_state = 50)
 
 # Prediction
 from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 
-
-regg = GradientBoostingRegressor(n_estimators = 500)
+# Create regressors
+xgbr = xgb.XGBRegressor(colsample_bytree=0.45, gamma=0.0468, 
+                             learning_rate=0.05, max_depth=3, 
+                             min_child_weight=1.7817, n_estimators=2000,
+                             reg_alpha=0.4640, reg_lambda=0.8571,
+                             subsample=0.5213, random_state =7, nthread = -1)
+regg = GradientBoostingRegressor(n_estimators = 2000)
 regf = RandomForestRegressor()
 regf2 = RandomForestRegressor(n_estimators=500)
 std_reg = LinearRegression()
+gsvf = GridSearchCV(estimator=regf2,param_grid={'n_estimators':[500],'n_jobs':[-1],'max_features':["auto",'sqrt','log2']},scoring='neg_mean_squared_log_error')
 
+
+# Train models
+gsvf.fit(x_train, y_train)
+xgbr.fit(x_train,y_train)
 regg.fit(x_train, y_train)
 regf2.fit(x_train, y_train)
 regf.fit(x_train, y_train)
@@ -179,7 +196,11 @@ r2_trf = regf.score(x_test, y_test)
 r2_tr = std_reg.score(x_train, y_train)
 r2_te = std_reg.score(x_test, y_test)
 
+y_testexp = np.exp(y_test)
 # Predicting Y anc calculating RMSE
+
+Y_predgsvf = gsvf.predict(x_test)
+Y_predxgb = xgbr.predict(x_test)
 Y_predg = regg.predict(x_test)
 Y_predf = regf.predict(x_test)
 Y_pred = std_reg.predict(x_test)
@@ -190,22 +211,28 @@ rmsef = math.sqrt(mean_squared_error(y_test, Y_predf))
 rmse = math.sqrt(mean_squared_error(y_test, Y_pred))
 rmsef2 = math.sqrt(mean_squared_error(y_test, Y_predf2))
 rmseg = math.sqrt(mean_squared_error(y_test, Y_predg))
+rmsex = math.sqrt(mean_squared_error(y_test, Y_predxgb))
+rmsegsvf = math.sqrt(mean_squared_error(y_test, Y_predgsvf))
+
 
 # Calculating RMSLE
 from sklearn.metrics import mean_squared_log_error
-rmslef = math.sqrt(mean_squared_log_error(y_test, Y_predf))
-rmsle = math.sqrt(mean_squared_log_error(y_test, Y_pred))
-rmslef2 = math.sqrt(mean_squared_log_error(y_test, Y_predf2))
-rmsleg = math.sqrt(mean_squared_log_error(y_test, Y_predg))
+rmslef = math.sqrt(mean_squared_log_error(y_testexp, np.exp(Y_predf)))
+#rmsle = math.sqrt(mean_squared_log_error(y_test, Y_pred))
+rmslef2 = math.sqrt(mean_squared_log_error(y_testexp, np.exp(Y_predf2)))
+rmsleg = math.sqrt(mean_squared_log_error(y_testexp,np.exp(Y_predg)))
+rmslex = math.sqrt(mean_squared_log_error(y_testexp, np.exp(Y_predxgb)))
+rmslegsvf = math.sqrt(mean_squared_log_error(y_testexp,np.exp(Y_predgsvf)))
 
 # Import test data
 testdata = pd.read_csv('D:/Udemy/Data Science 2020 Complete Data Science and Machine Learning/006 - Kaggle Project/test.csv')
-testdata1 = testdata.drop(['workingday'], axis = 1)
+
 time = pd.DataFrame(testdata['datetime'])
 
-testdata2 = testdata1.drop(['datetime'], axis = 1)
+testdata2 = testdata.drop(['datetime'], axis = 1)
 
 # Extract month and hour
+testdata2['year'] = pd.DatetimeIndex(time['datetime']).year.map({2011:0,2012:1})
 testdata2['month'] = pd.DatetimeIndex(time['datetime']).month
 testdata2['hour'] = pd.DatetimeIndex(time['datetime']).hour
 
@@ -216,6 +243,7 @@ testdata2['hour'] = pd.DatetimeIndex(time['datetime']).hour
 
 testdata2.dtypes
 # Convert to category
+testdata2['year'] = testdata2['year'].astype('category')
 testdata2['season'] = testdata2['season'].astype('category')
 testdata2['month'] = testdata2['month'].astype('category')
 testdata2['hour'] = testdata2['hour'].astype('category')
@@ -229,11 +257,18 @@ Y_pred3 = std_reg.predict(testdata_dummy)
 Y_pred4 = regf.predict(testdata_dummy)
 Y_pred5 = regf2.predict(testdata_dummy)
 Y_pred6 = regg.predict(testdata_dummy)
+Y_pred7 = xgbr.predict(testdata_dummy)
+Y_predgsvf = gsvf.predict(testdata_dummy)
 
+
+
+predgsvf = np.exp(Y_predgsvf) #gsvf
+pred7 = np.exp(Y_pred7) #xgbr
 pred6 = np.exp(Y_pred6) #regg
 pred4 = np.exp(Y_pred4) #regf
 pred3 = np.exp(Y_pred3)
 pred5 = np.exp(Y_pred5) # regf2
+
 
 ans4 = pd.concat([time,Y_pred2], axis=1)
 ans4.columns = ['datetime','count']
@@ -254,3 +289,12 @@ ans7.to_csv('D:/Kaggle/answer7.csv', index=False)
 ans8 = pd.concat([time,pd.DataFrame(pred6)], axis=1)
 ans8.columns = ['datetime','count']
 ans8.to_csv('D:/Kaggle/answer8.csv', index=False)
+
+ans9 = pd.concat([time,pd.DataFrame(pred7)], axis=1)
+ans9.columns = ['datetime','count']
+ans9.to_csv('D:/Kaggle/answer9.csv', index=False)
+
+ans10 = pd.concat([time,pd.DataFrame(predgsvf)], axis=1)
+ans10.columns = ['datetime','count']
+ans10.to_csv('D:/Kaggle/answer10.csv', index=False)
+
